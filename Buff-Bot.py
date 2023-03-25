@@ -9,6 +9,7 @@ from requests.exceptions import SSLError, ConnectTimeout
 import requests
 import time
 from libs import FileUtils
+import pickle
 
 # format参考：E:/python27/Lib/logging/__init__.py
 _LOG_NAME = '{script_name}_{date}.log'.format(
@@ -74,8 +75,8 @@ def main():
                                                                     "steam_username": "", "steam_password": ""}))
     if first_run:
         logger.info("检测到首次运行，已为您生成配置文件，请按照README提示填写配置文件！")
-        logger.info('点击任何键继续...')
-        os.system('pause >nul')
+        # logger.info('点击回车键继续...')
+        # input()
     config = json.loads(FileUtils.readfile("config/config.json"))
     ignoredoffer = []
     if 'dev' in config and config['dev']:
@@ -90,20 +91,47 @@ def main():
     if development_mode:
         logger.info("开发者模式已开启，跳过Steam登录")
     else:
-        try:
-            logger.info("正在登录Steam...")
-            acc = json.loads(FileUtils.readfile('config/steamaccount.json'))
-            # https://steamcommunity.com/dev/apikey
-            client = SteamClient(acc.get('api_key'))
-            SteamClient.login(client, acc.get('steam_username'), acc.get('steam_password'), 'config/steamaccount.json')
-            logger.info("登录完成！\n")
-        except FileNotFoundError:
-            logger.error('未检测到steamaccount.json，请添加到steamaccount.json后再进行操作！')
-            sys.exit()
-        except (SSLError, ConnectTimeout, TimeoutError):
-            logger.error('\n网络错误！请通过修改hosts/使用代理等方法代理Python解决问题。\n'
-                         '注意：使用游戏加速器并不能解决问题。请尝试使用Proxifier及其类似软件代理Python.exe解决。')
-            sys.exit()
+        relog = False
+        if not os.path.exists('steam_session.pkl'):
+            logger.info("未检测到steam_session.pkl文件存在")
+            relog = True
+        else:
+            logger.info("检测到缓存的steam_session.pkl文件存在，正在尝试登录")
+            with open('steam_session.pkl', 'rb') as f:
+                client = pickle.load(f)
+                if json.loads(FileUtils.readfile('config/config.json'))['ignoreSSLError']:
+                    logger.warning("警告：已经关闭SSL验证，账号可能存在安全问题")
+                    client._session.verify = False
+                    requests.packages.urllib3.disable_warnings()
+                if client.is_session_alive():
+                    logger.info("登录成功\n")
+                else:
+                    relog = True
+        if relog:
+            try:
+                logger.info("正在登录Steam...")
+                acc = json.loads(FileUtils.readfile('config/steamaccount.json'))
+                client = SteamClient(acc.get('api_key'))
+                if json.loads(FileUtils.readfile('config/config.json'))['ignoreSSLError']:
+                    logger.warning("\n警告：已经关闭SSL验证，账号可能存在安全问题\n")
+                    client._session.verify = False
+                    requests.packages.urllib3.disable_warnings()
+                SteamClient.login(client, acc.get('steam_username'), acc.get('steam_password'),
+                                  'config/steamaccount.json')
+                with open('steam_session.pkl', 'wb') as f:
+                    pickle.dump(client, f)
+                logger.info("登录完成！已经自动缓存session.\n")
+            except FileNotFoundError:
+                logger.error('未检测到steamaccount.json，请添加到steamaccount.json后再进行操作！')
+                sys.exit()
+            except (ConnectTimeout, TimeoutError):
+                logger.error('\n网络错误！请通过修改hosts/使用代理等方法代理Python解决问题。\n'
+                             '注意：使用游戏加速器并不能解决问题。请尝试使用Proxifier及其类似软件代理Python.exe解决。')
+                sys.exit()
+            except SSLError:
+                logger.error('登录失败。SSL证书验证错误！'
+                             '若您确定网络环境安全，可尝试将config.json中的ignoreSSLError设置为false\n')
+                sys.exit()
 
     while True:
         try:
