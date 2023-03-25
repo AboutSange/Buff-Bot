@@ -140,3 +140,4 @@ steamaccount.txt
 config/steamaccount.json
 config/config.json
 dev/*
+steam_session.pkl
