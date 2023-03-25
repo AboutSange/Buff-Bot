@@ -139,5 +139,6 @@ config/cookies.txt
 steamaccount.txt
 config/steamaccount.json
 config/config.json
+config/notify.json
 dev/*
 steam_session.pkl

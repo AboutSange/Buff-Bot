@@ -1,0 +1,8 @@
+{
+  "email":{
+    "host": "",
+    "pass": "",
+    "sender": "",
+    "receivers": []
+  }
+}

@@ -10,6 +10,7 @@ import requests
 import time
 from libs import FileUtils
 import pickle
+from notify._email import Mail
 
 # format参考：E:/python27/Lib/logging/__init__.py
 _LOG_NAME = '{script_name}_{date}.log'.format(
@@ -26,6 +27,16 @@ headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                   'Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.27',
 }
+MAIL_CLIENT = None
+
+
+def notify_buff_cookie_expired():
+    u"""cookie过期告警。"""
+    content = u'Cookie已过期，需要重新登录！程序已退出，请及时处理！'
+    subject = u'【BUFF Bot】Cookie过期，需要重新登录！'
+    from_name = u'BUFF Bot'
+    to_name = u'admin'
+    MAIL_CLIENT.send(content, subject, from_name, to_name)
 
 
 def checkaccountstate(dev=False):
@@ -39,6 +50,7 @@ def checkaccountstate(dev=False):
                 if 'nickname' in response_json['data']:
                     return response_json['data']['nickname']
         logger.error('BUFF账户登录状态失效，请检查cookies.txt！')
+        notify_buff_cookie_expired()
         sys.exit()
 
 
@@ -65,6 +77,13 @@ def main():
     except FileNotFoundError:
         logger.error("未检测到config.example.json，请前往GitHub进行下载，并保证文件和程序在同一目录下。")
         sys.exit()
+    try:
+        if not os.path.exists("config/notify.json"):
+            first_run = True
+            shutil.copy("config/notify.example.json", "config/notify.json")
+    except FileNotFoundError:
+        logger.error("未检测到notify.example.json。")
+        sys.exit()
     if not os.path.exists("config/cookies.txt"):
         first_run = True
         FileUtils.writefile("config/cookies.txt", "session=")
@@ -75,9 +94,15 @@ def main():
                                                                     "steam_username": "", "steam_password": ""}))
     if first_run:
         logger.info("检测到首次运行，已为您生成配置文件，请按照README提示填写配置文件！")
-        # logger.info('点击回车键继续...')
-        # input()
+        logger.info('点击回车键继续...')
+        input()
     config = json.loads(FileUtils.readfile("config/config.json"))
+
+    notify_config = json.loads(FileUtils.readfile("config/notify.json"))
+    mail_config = notify_config.get("email", {})
+    global MAIL_CLIENT
+    MAIL_CLIENT = Mail(kwargs=mail_config)
+
     ignoredoffer = []
     if 'dev' in config and config['dev']:
         development_mode = True
@@ -127,19 +152,19 @@ def main():
             except (ConnectTimeout, TimeoutError):
                 logger.error('\n网络错误！请通过修改hosts/使用代理等方法代理Python解决问题。\n'
                              '注意：使用游戏加速器并不能解决问题。请尝试使用Proxifier及其类似软件代理Python.exe解决。')
-                sys.exit()
+                raise Exception("网络错误！")
             except SSLError:
                 logger.error('登录失败。SSL证书验证错误！'
                              '若您确定网络环境安全，可尝试将config.json中的ignoreSSLError设置为false\n')
-                sys.exit()
+                raise Exception("SSL证书验证错误！")
 
     while True:
         try:
             logger.info("正在检查Steam账户登录状态...")
             if not development_mode:
                 if not client.is_session_alive():
-                    logger.error("Steam登录状态失效！程序退出...")
-                    sys.exit()
+                    logger.error("Steam登录状态失效！")
+                    raise Exception("Steam登录状态失效！")
             logger.info("Steam账户状态正常")
             logger.info("正在进行待发货/待收货饰品检查...")
             checkaccountstate(dev=development_mode)
@@ -190,17 +215,19 @@ def main():
                     logger.info("暂无BUFF报价请求.将在180秒后再次检查BUFF交易信息！\n")
                 else:
                     logger.info("暂无BUFF报价请求.将在180秒后再次检查BUFF交易信息！\n")
-            except KeyboardInterrupt:
-                logger.info("用户停止，程序退出...")
-                sys.exit()
             except Exception as e:
                 logger.error(e, exc_info=True)
                 logger.info("出现错误，稍后再试！")
             time.sleep(180)
-        except KeyboardInterrupt:
-            logger.info("用户停止，程序退出...")
-            sys.exit()
+        except Exception as e:
+            logger.error(e, exc_info=True)
+            raise
 
 
 if __name__ == '__main__':
-    main()
+    while True:
+        try:
+            main()
+        except Exception:
+            # 主要是网络错误
+            time.sleep(60)
