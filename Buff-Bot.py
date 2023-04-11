@@ -32,8 +32,8 @@ MAIL_CLIENT = None
 
 def notify_buff_cookie_expired():
     u"""cookie过期告警。"""
-    content = u'Cookie已过期，需要重新登录！程序已退出，请及时处理！'
-    subject = u'【BUFF Bot】Cookie过期，需要重新登录！'
+    content = u'BUFF Cookie已过期，需要重新登录！程序已退出，请及时处理！'
+    subject = u'【BUFF Bot】BUFF Cookie过期，需要重新登录！'
     from_name = u'BUFF Bot'
     to_name = u'admin'
     MAIL_CLIENT.send(content, subject, from_name, to_name)
@@ -54,15 +54,29 @@ def checkaccountstate(dev=False):
         sys.exit()
 
 
-def format_str(text: str, trade):
+def log_trade_goods_infos(sell_notification: dict, trade):
+    title = sell_notification['title']
+    body = sell_notification['body']
+
+    num = len(trade['goods_infos'])
+    log_title_flag = False
     for good in trade['goods_infos']:
         good_item = trade['goods_infos'][good]
         created_at_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(trade['created_at']))
-        text = text.format(item_name=good_item['name'], steam_price=good_item['steam_price'],
-                           steam_price_cny=good_item['steam_price_cny'], buyer_name=trade['bot_name'],
-                           buyer_avatar=trade['bot_avatar'], order_time=created_at_time_str, game=good_item['game'],
-                           good_icon=good_item['original_icon_url'])
-    return text
+
+        if not log_title_flag:
+            # 只打印一次title
+            logger.info("{title}".format(
+                title=title.format(item_name=good_item['name'], game=good_item['game'], num=num),
+            ))
+            log_title_flag = True
+
+        logger.info("{body}".format(
+            body=body.format(item_name=good_item['name'], steam_price=good_item['steam_price'],
+                             steam_price_cny=good_item['steam_price_cny'], buyer_name=trade['bot_name'],
+                             order_time=created_at_time_str, game=good_item['game'],
+                             buyer_extra_info=good_item['bot_extra_info']),
+        ))
 
 
 def main():
@@ -176,6 +190,7 @@ def main():
                 response = requests.get("https://buff.163.com/api/message/notification", headers=headers)
                 to_deliver_order = json.loads(response.text).get('data', {}).get('to_deliver_order', {})
             if int(to_deliver_order.get('csgo', 0)) != 0:
+                logger.info('[debug]to_deliver_order: {}'.format(to_deliver_order))
                 logger.info("CSGO待发货：" + str(int(to_deliver_order.get('csgo', 0))) + "个")
             if development_mode and os.path.exists("dev/steam_trade.json"):
                 logger.info("开发者模式已开启，使用本地待发货文件")
@@ -183,6 +198,7 @@ def main():
             else:
                 response = requests.get("https://buff.163.com/api/market/steam_trade", headers=headers)
                 trade = json.loads(response.text).get('data', [])
+                logger.info('[debug]trade: {}'.format(trade))
             logger.info("查找到" + str(len(trade)) + "个待处理的交易报价请求！")
             try:
                 if len(trade) != 0:
@@ -203,10 +219,7 @@ def main():
                                 ignoredoffer.append(offerid)
                                 logger.info("接受完成！已经将此交易报价加入忽略名单！\n")
                                 if 'sell_notification' in config:
-                                    logger.info("{title}:{body}".format(
-                                        title=format_str(config['sell_notification']['title'], go),
-                                        body=format_str(config['sell_notification']['body'], go),
-                                    ))
+                                    log_trade_goods_infos(config['sell_notification'], go)
                             except Exception as e:
                                 logger.error(e, exc_info=True)
                                 logger.info("出现错误，稍后再试！")

@@ -2,7 +2,7 @@
   "dev": false,
   "ignoreSSLError": false,
   "sell_notification": {
-    "title": "成功出售{game}饰品: {item_name}",
-    "body": "![good_icon]({good_icon})\n游戏: {game}\n饰品: {item_name}\nSteam价格(参考): {steam_price} USD\nSteam价格(参考): {steam_price_cny} RMB\n![buyer_avatar]({buyer_avatar})\n买家: {buyer_name}\n订单时间: {order_time}"
+    "title": "成功出售{num}件{game}饰品: {item_name}\n",
+    "body": "游戏: {game}\n饰品: {item_name}\nSteam价格参考): {steam_price} USD\nSteam价格(参考): {steam_price_cny} RMB\n买家: {buyer_name}\n买家额外信息: {buyer_extra_info}\n订单时间: {order_time}"
   }
 }
