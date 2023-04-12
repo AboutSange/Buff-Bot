@@ -12,16 +12,19 @@ from libs import FileUtils
 import pickle
 from notify._email import Mail
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 # format参考：E:/python27/Lib/logging/__init__.py
 _LOG_NAME = '{script_name}_{date}.log'.format(
     script_name=os.path.basename(__file__),
     date=time.strftime('%Y%m%d', time.localtime()))
 CUR_DIR = os.path.dirname(os.path.realpath(__file__))
 _LOG_FILE = os.path.join(CUR_DIR, _LOG_NAME)
-logging.basicConfig(filename=_LOG_FILE,
-                    format='%(asctime)s:%(process)d:%(lineno)d:%(levelname)s:%(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+f_handler = logging.FileHandler(_LOG_FILE, encoding='utf-8')
+f_handler.setLevel(logging.DEBUG)
+log_formatter = logging.Formatter('%(asctime)s:%(process)d:%(lineno)d:%(levelname)s:%(message)s')
+f_handler.setFormatter(log_formatter)
+logger.addHandler(f_handler)
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -45,6 +48,7 @@ def checkaccountstate(dev=False):
         return json.loads(FileUtils.readfile('dev/buff_account.json'))['data']['nickname']
     else:
         response_json = requests.get('https://buff.163.com/account/api/user/info', headers=headers).json()
+        logger.debug('checkaccountstate response_json: {}'.format(str(response_json)))
         if response_json['code'] == 'OK':
             if 'data' in response_json:
                 if 'nickname' in response_json['data']:
@@ -75,7 +79,7 @@ def log_trade_goods_infos(sell_notification: dict, trade):
             body=body.format(item_name=good_item['name'], steam_price=good_item['steam_price'],
                              steam_price_cny=good_item['steam_price_cny'], buyer_name=trade['bot_name'],
                              order_time=created_at_time_str, game=good_item['game'],
-                             buyer_extra_info=good_item['bot_extra_info']),
+                             buyer_extra_info=trade['bot_extra_info']),
         ))
 
 
@@ -190,7 +194,7 @@ def main():
                 response = requests.get("https://buff.163.com/api/message/notification", headers=headers)
                 to_deliver_order = json.loads(response.text).get('data', {}).get('to_deliver_order', {})
             if int(to_deliver_order.get('csgo', 0)) != 0:
-                logger.info('[debug]to_deliver_order: {}'.format(to_deliver_order))
+                logger.debug('to_deliver_order: {}'.format(to_deliver_order))
                 logger.info("CSGO待发货：" + str(int(to_deliver_order.get('csgo', 0))) + "个")
             if development_mode and os.path.exists("dev/steam_trade.json"):
                 logger.info("开发者模式已开启，使用本地待发货文件")
@@ -198,7 +202,7 @@ def main():
             else:
                 response = requests.get("https://buff.163.com/api/market/steam_trade", headers=headers)
                 trade = json.loads(response.text).get('data', [])
-                logger.info('[debug]trade: {}'.format(trade))
+                logger.debug('trade: {}'.format(trade))
             logger.info("查找到" + str(len(trade)) + "个待处理的交易报价请求！")
             try:
                 if len(trade) != 0:
