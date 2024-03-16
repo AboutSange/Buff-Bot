@@ -1,2 +1,3 @@
-steampy-fixed
 requests
+beautifulsoup4
+rsa
